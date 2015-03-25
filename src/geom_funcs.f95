@@ -1,23 +1,20 @@
 ! fortran_free_source
 !
-! (c) Copyright 2010, 2015 Bradley J. Eck
-! This module is part of PERFCODE 
+!   This module is part of Perfcode, written by Bradley J Eck
 !
-
-!============================================================================
-!   \\\\\\\\\\                                        //////////
-                        MODULE geom_funcs
-!   //////////                                        \\\\\\\\\\
-                        implicit none
-
-                        contains
-!============================================================================
-!   1.  F_L_xi
-!   2.  unmap_x
-!   3.  unmap_y
+MODULE geom_funcs
+implicit none
+contains
+!
+!   1. Function  F_L_xi
+!   2. Function unmap_x
+!   3. Function unmap_y
 
 !===========================================================================
-Function F_L_xi(xi, eta, seg) Result(L_xi) !xcc1, ycc1, dx, dy, R1, dR, W, theta1, dtheta)
+!   \\\\\\\\\\     B E G I N       F U N C T I O N       //////////
+!   //////////             F _ L _ X I                   \\\\\\\\\\
+!===========================================================================
+Function F_L_xi(xi, eta, seg) Result(L_xi) 
 !   Computes the METRIC COEFFICIENT for the length mapping.
 !Function F_length_xi(xi, eta, xcc1, ycc1, dx, dy, R1, dR, W, theta1, dtheta)
 ! GEOMETRY MAPPING FUNCTIONS from Geometry.xlsb
@@ -55,12 +52,21 @@ dy_dxi = dx + dR * Sin(Angle) + dtheta * Cos(Angle) * &
          
 ! Calculate metric coefficient
 L_xi = sqrt( (dx_dxi ** 2 + dy_dxi ** 2) )
-
+!---------------------------------------------------------------------------
 End Function F_L_xi
-!=============================================================================
+!===========================================================================
+!   \\\\\\\\\\     E N D           F U N C T I O N       //////////
+!   //////////             F _ L _ X I                   \\\\\\\\\\
+!===========================================================================
 
+
+!===========================================================================
+!   \\\\\\\\\\     B E G I N       F U N C T I O N       //////////
+!   //////////             U N M A P _ X                 \\\\\\\\\\
+!===========================================================================
 Function unmap_x(xi, eta, seg) Result( X )
-!   
+!   Calculates the physical X coordinate of a point in the grid based on 
+!       its xi and eta coordinates.
 use shared, only: CLSEG
 implicit none
 !   Arguments
@@ -85,12 +91,21 @@ dtheta = seg%dtheta
 X = (xcc1 + xi * dx) + &
           (R1 + xi * dR + (eta - 0.5) * W) * Cos(theta1 + xi * dtheta)
 
+!------------------------------------------------------------------------
 end function unmap_x
-!===============================================================================
+!===========================================================================
+!   \\\\\\\\\\     E N D           F U N C T I O N       //////////
+!   //////////             U N M A P _ X                 \\\\\\\\\\
+!===========================================================================
 
 
+!===========================================================================
+!   \\\\\\\\\\     B E G I N       F U N C T I O N       //////////
+!   //////////             U N M A P _ Y                 \\\\\\\\\\
+!===========================================================================
 Function unmap_y(xi, eta, seg) result( Y )
-
+!   Calculates the physical Y coordinate of a point on the grid
+!       from its computational xi,eta coordinate
 use shared, only: CLSEG
 implicit none
 real xi, eta  
@@ -114,19 +129,12 @@ dtheta = seg%dtheta
 Y = (ycc1 + xi * dy) + &
           (R1 + xi * dR + (eta - 0.5) * W) * Sin(theta1 + xi * dtheta)
 
+!------------------------------------------------------------------------
 end function unmap_y
-!==============================================================================
+!===========================================================================
+!   \\\\\\\\\\     E N D           F U N C T I O N       //////////
+!   //////////             U N M A P _ Y                 \\\\\\\\\\
+!===========================================================================
 
 
-
-
-
-
-
-
-
-!============================================================================
-!   \\\\\\\\\                                       ///////////
-                       END MODULE geom_funcs
-!   /////////                                       \\\\\\\\\\\\
-!============================================================================
+END MODULE geom_funcs

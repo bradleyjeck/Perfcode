@@ -1,18 +1,14 @@
 ! fortran_free_source
 !
-! (c) Copyright 2010, 2015 Bradley J. Eck
-! This module is part of PERFCODE 
-!
+! This module is part of PERFCODE, written by Brad Eck
 
-module pfc1Dsubs
-
+MODULE pfc1Dsubs 
 implicit none
-
 contains
 
-
-
-
+!   1. setup_1D_section
+!   2. grid_1D_section
+!   3. PFC1DIMP 
 
 !===================================================================================
 !       \\\\\\\\\\      B E G I N    S U B R O U T I N E      //////////
@@ -198,9 +194,9 @@ ir = (/ ( i, i = seg, 1, -1  ) /)
 
 !--------------------------------------------------
 !Format statements
-90      FORMAT( i7, F12.6 )
+90      FORMAT( I12, F12.6 )
 99      FORMAT( 2( F12.6, ',' ) )
-100     FORMAT( 2( F12.6, ',' ), 1(I7, ','), 5( F12.6, ',')  )
+100     FORMAT( 2( F12.6, ',' ), 1(I12, ','), 5( F12.6, ',')  )
 
 
 !------------------------------------------------------------------------------
@@ -213,7 +209,7 @@ ir = (/ ( i, i = seg, 1, -1  ) /)
 
 
 !====================================================================================
-!	\\\\\\\\\\\\        B E G I N      P R O G R A M     //////////
+!	\\\\\\\\\\\\     B E G I N     S U B R O U T I N E   //////////
 !	////////////            P F C 1 D I M P              \\\\\\\\\\
 !====================================================================================
 !       Purpose:        This program computes a 1D solution for unsteady
@@ -222,6 +218,9 @@ ir = (/ ( i, i = seg, 1, -1  ) /)
 !       History:        Source code revised from previous program that used
 !                       an explicit method, and revised again to use as a 
 !                       subroutien within the 2D model
+!
+!                       29 June 2011 -- added pointers for use with K and K_input etc.
+!
 !       IC:             The depth on input to the subroutine
 !       BCs:            Various
 !       Linearization:  Picard Iteration (lag the coefficients)
@@ -232,11 +231,11 @@ ir = (/ ( i, i = seg, 1, -1  ) /)
 
 
 SUBROUTINE pfc1Dimp( h_old, dt, rain, tolit, qmax, &
-                     h_new, imax, eta_0_BC, eta_1_BC )
+                     h_new, imax, eta_0_BC, eta_1_BC, Qout, X_sheet, numit )
 !bring in related modules
-use shared,    only: K, g, b_pfc, n_mann, por, XCV, ZCV, EDX, &
+use shared,    only: K_input, g, b_pfc_input, n_mann_input, por_input, XCV, ZCV, EDX, &
                      etaCV, relax, relax_tran, h_pfc_min, eta_0_hp2_max
-use utilities, only: F_Linterp, F_L2_NORM
+use utilities, only: F_Linterp, F_L2_NORM, MIXED_RESIDUAL
 use solvers,   only: Thomas
 use pfc1Dfuns
 use outputs,   only: WRITE_MATRIX, write_vector
@@ -251,14 +250,19 @@ implicit none
 !        the 'h_old' matrix in PERFCODE.
 
 ! Arguments
-integer,              intent(in) :: imax    ! imax == TNE from 1D gridding
-real, dimension(imax), intent(in) :: h_old
+integer,              intent(in)   :: imax    ! imax == TNE from 1D gridding
+real, dimension(imax), intent(in)  :: h_old
 real,                   intent(in) :: dt
 real,                   intent(in) :: rain
 real,                   intent(in) :: tolit
 integer,                intent(in) :: qmax
-real, dimension(imax), intent(out):: h_new
-character( len = 7 ) :: eta_0_BC, eta_1_BC
+real, dimension(imax), intent(out) :: h_new
+character( len = 7 )               :: eta_0_BC, eta_1_BC
+real,  optional,       intent(out) :: Qout, X_sheet
+integer, optional,     intent(out) :: numit
+
+! Paramaters
+real, pointer :: K, b_pfc, por, n_mann
 
 !SCALERS
 INTEGER :: i, n, q
@@ -268,7 +272,7 @@ REAL    :: cputime
 real, dimension(:), pointer ::  X, Z, DX 
 
 
-!guess values for water thickness in cm
+!guess values for water thickness 
 REAL    :: h_itr(imax)
 !linear system (tri-diagonal)
 REAL    :: main(imax), super(imax), sub(imax), RHS(imax)
@@ -277,14 +281,11 @@ REAL    :: h_temp (imax) !,  h_new  (imax)
 !convergence test
 REAL    :: relchg(imax)
 !post processing
-REAL    :: head  (imax), hygrad (imax)              ! head and hydraulic gradient
-REAL    :: q_pav (imax), q_surf (imax), q_tot(imax) !fluxes      
+REAL    :: head  (imax), hygrad (imax)           ! head and hydraulic gradient
+REAL, dimension(imax)    :: q_pav, q_surf, q_tot ! fluxes
 !summary info
-integer, parameter :: nmax = 2
-INTEGER :: numit  (nmax), loc(nmax)  ! number of iterations at each timestep & locaiton of max change
-REAL    :: maxdiff(nmax)             ! max change and its location
-!FUNCTIONS
-!       REAL    :: F_por, F_CC
+INTEGER :: loc  ! location of max change
+REAL    :: maxdiff      ! max change  
 !CHARACTERS
 CHARACTER(8) DATE
 CHARACTER(10) TIME
@@ -307,11 +308,17 @@ real :: eps_itr_tol
 
 integer :: nip    ! number of interpolation points
 !----------------------------------------
-! Set pointers
+! Set pointers (used this to avoid changing variable names)
 
 X => XCV
 Z => ZCV
 DX => EDX
+
+K      =>      K_input
+por    =>    por_input
+b_pfc  =>  b_pfc_input
+n_mann => n_mann_input
+
 
 b = b_pfc
 n = 1
@@ -340,12 +347,12 @@ i_Zmax = maxloc( Z )
 ! main, super & sub are diagonals of the coefficient matrix
 ! RHS is the right hand side of the linear system
 
-open( unit = 50, file = 'PF_smry.csv',  status = 'REPLACE')
-write(50,54) 'n/i', (/ (i,  i = 1, imax) /)
+!open( unit = 50, file = 'PF_smry.csv',  status = 'REPLACE')
+!write(50,54) 'n/i', (/ (i,  i = 1, imax) /)
 
-open( unit = 110, file = '1DRunDetails.txt', status = 'REPLACE')
+! open( unit = 110, file = '1DRunDetails.txt', status = 'REPLACE')
 
-54 format( ( A, ','), 10000( I7, ',') )
+54 format( ( A, ','), 10000( I12, ',') )
 
 
 
@@ -393,17 +400,17 @@ elseif( eta_1_BC .EQ. 'MOC_KIN') then
         cross_slope = ( Z(i+1) - Z(i) ) / ( X(i+1) - X(i) )   
         ! If it comes out negative, a different BC is needed
         if( cross_slope .LT. 0.0) then
-            write(110,*) 'Different BC needed at eta = 1'
+            write(*,*) 'PFC1DIMP: Different BC needed at eta = 1'
         endif 
         if( h_old(i) .LE. b_pfc) then
                 ! PFC FLOW MOC BC
                 dx_moc =  K * (cross_slope) * dt / por   
                 !Interpolate up the drainage slope...make sure we have enough points
                 nip = NINT(dx_moc / DX(1) ) + 2
-                write(110,*) 'eta_1_bc X=', (xcv(1) + dx_moc), &
-                                    'nip=', nip,               &
-                                     'KX=',   XCV(1:nip),      &
-                                     'KY=', h_old(1:nip)
+!                write(110,*) 'eta_1_bc X=', (xcv(1) + dx_moc), &
+!                                    'nip=', nip,               &
+!                                     'KX=',   XCV(1:nip),      &
+!                                     'KY=', h_old(1:nip)
                 hp1 = F_Linterp(       X = (xcv(1) + dx_moc), &                   
                                  Known_X = XCV( 1:nip)      , & 
                                  Known_Y = h_old(1:nip)     , &
@@ -440,7 +447,7 @@ elseif( eta_1_BC .EQ. 'MOC_KIN') then
                 endif
                 ! Interpolate up the slope to find hs1
                 nip = NINT(ds / DX(1) ) + 2
-                write(110,*) 'eta_1_bc X=',(xcv(1) + ds), 'nip=', nip, 'KX=',   XCV(1:nip), 'KY=', h_old(1:nip)
+!                write(110,*) 'eta_1_bc X=',(xcv(1) + ds), 'nip=', nip, 'KX=',   XCV(1:nip), 'KY=', h_old(1:nip)
                 hs1 = F_Linterp(       X = (xcv(1) + ds),   &                   
                                  Known_X = XCV( 1:nip)  , &    !(/ 0.      ,     DX(i)  /) ,&
                                  Known_Y =  h_old(1:nip), &                            !(/ h_old(i), h_old(i+1) /), &
@@ -532,16 +539,16 @@ BC0:if( eta_0_BC .EQ. 'NO_FLOW') then
         ! METHOD OF CHARCTERISTICS KINEMATIC BOUNDAARY
         cross_slope = ( Z(i-1) - Z(i) ) / ( X(i) - X(i-1) )    ! cross slope is positive downwars for use in SQRT
         if( cross_slope .LT. 0.0) then
-            write(110,*) 'Different BC needed at eta = 0'
+            write(*,*) 'PFC1DIMP: Different BC needed at eta = 0'
         endif
         if( h_old(i) .LE. b_pfc) then
                 ! PFC FLOW MOC BC
                 dx_moc =  K * (cross_slope) * dt / por       !NEED MAGNITUDE OF SLOPE AT CENTER OF EACH CELL               
                 nip = NINT(dx_moc / DX(imax) ) + 2
-                write(110,*) 'eta_0_BC X=', (XCV(imax) - dx_moc)  ,  &
-                                    'nip=', nip,                     &
-                                     'KX=', XCV( imax-nip+1:imax) ,  &
-                                     'KY=', h_old( imax-nip+1 : imax)
+!                write(110,*) 'eta_0_BC X=', (XCV(imax) - dx_moc)  ,  &
+!                                    'nip=', nip,                     &
+!                                     'KX=', XCV( imax-nip+1:imax) ,  &
+!                                     'KY=', h_old( imax-nip+1 : imax)
 
                 hp1 = F_Linterp(       X = (XCV(imax) - dx_moc)   ,  &                   
                                  Known_X = (XCV( imax-nip+1:imax)),  & 
@@ -579,10 +586,10 @@ BC0:if( eta_0_BC .EQ. 'NO_FLOW') then
                 endif
                 ! Interpolate up the slope to find hs1
                 nip = NINT(ds / DX(imax) ) + 2
-                write(110,*) 'eta_0_BC X=', (XCV(imax) - ds)         , &
-                                    'nip=', nip                      , &
-                                     'KX=', XCV( imax-nip+1:imax)    , &
-                                     'KY=', h_old( imax-nip+1 : imax)
+!                write(110,*) 'eta_0_BC X=', (XCV(imax) - ds)         , &
+!                                    'nip=', nip                      , &
+!                                     'KX=', XCV( imax-nip+1:imax)    , &
+!                                     'KY=', h_old( imax-nip+1 : imax)
 
                 hs1 = F_Linterp(       X = (XCV(imax) - ds)          , &                   
                                  Known_X = (XCV( imax-nip+1:imax))   , &
@@ -613,9 +620,9 @@ transition = .false.
 do i = 1, imax
     pf = F_por( h_old(i) )
     pf1= F_por( h_itr(i) )
-    if( pf .GT. pf1 .OR. pf .LT. pf1) then
+    if( (pf .GT. pf1) .OR. (pf .LT. pf1) ) then
         transition = .true.
-        write(110,*) 'PERFCODE: transition for cell i=', i, 'pf=', pf, 'pf1=', pf1 
+!        write(110,*) 'PERFCODE: transition for cell i=', i, 'pf=', pf, 'pf1=', pf1 
     endif
 end do
 
@@ -632,49 +639,14 @@ endif
         CALL THOMAS(main, super, sub, RHS, h_temp, imax)
 
 
-
-! Compute residual and relative change for this iteration.  This took
-!  some careful though to handle both filling and draining cases.
-!  relative change is used when the solution is far from zero
-!  and absolute change (residual) is used near zero.
-
-do i = 1, imax
- 
-    if( h_temp(i) .GT. TINY( h_temp(i) ) ) then
-
-            ! Compute residual for this iteration
-            residual(i) =  h_temp(i) - h_itr(i)
-
-            ! Handle a result that is effectively zero by
-            ! using an absolute tolerance instead of 
-            ! a relative one
-            if( h_temp(i) .LE. h_pfc_min  .and. &
-                residual (i) .LE. eps_itr_tol     ) then
-        
-                    relchg(i) = 0.0
-            
-            else
-                    relchg (i) =  residual (i) / h_itr(i)
-            endif
-            
-    elseif( h_temp(i) .LE. TINY( h_temp(i) ) ) then
-
-            ! the model is saying the cell is empty, 
-            ! so force the solution to be zero      
-            h_temp(i) =  0.0
-            ! compute the residual
-            residual(i) =  h_temp(i) - h_itr(i)
-            ! For the zero case, use an absolute rather than
-            ! relative tolerance by setting the value of relchng
-            ! below the tolerance instead of computing it.
-            if( abs( residual(i) ) .LE. eps_itr_tol ) then
-                    
-                    relchg(i) = 0.0
-            endif
-    endif
-
-end do
-         
+! Compute residual and relative change for this iteration
+call MIXED_RESIDUAL( old     = h_itr       , &
+                     new     = h_temp      , &
+                     vmax    = imax        , & 
+                     res     = residual    , &
+                     mixres  = relchg     , &
+                     abs_tol = h_pfc_min   , &
+                     rel_tol = eps_itr_tol         )       
 
 if( maxval( h_temp) .LT. TINY( h_temp(1) )  ) then
        write(*,*) 'PFC1DIMP: Zeroed out.  Writing system and stopping program'
@@ -687,14 +659,14 @@ if( maxval( h_temp) .LT. TINY( h_temp(1) )  ) then
 
        call write_vector( h_old, imax, 'h_old_1d.csv')
        STOP
-10  FORMAT (  (I7, ','), 5(E17.7, ',') ) 
+10  FORMAT (  (I12, ','), 5(E12.7, ',') ) 
 
 end if
 
 
 !perform usual iteration check
-IF ( maxval ( ABS( relchg ) ) .le. eps_itr_tol .AND.  & 
-      F_L2_NORM( relchg, imax )   .le. eps_itr_tol       ) then
+IF (  ( maxval ( ABS( relchg ) ) .le. eps_itr_tol ) .AND.  & 
+      (F_L2_NORM( relchg, imax )   .le. eps_itr_tol )      ) then
         !  WRITE(*,*) 'Time step n = ', n,' converged in q = ', q, ' iterations.'
           EXIT
       end if    
@@ -712,11 +684,11 @@ h_itr_hist ( : , q ) = h_itr
 
 
 
- WRITE(110,*) 'ITERATION q=', q                     , &
-             'Max Change of', maxval( abs( relchg) ), &
-                     'at i=', maxloc( abs( relchg)) , &
-                'h_temp(i)=', h_temp( maxloc( abs( relchg)) ) , &
-                  'L2_Norm=', F_L2_NORM( relchg, imax) 
+! WRITE(110,*) 'ITERATION q=', q                     , &
+!             'Max Change of', maxval( abs( relchg) ), &
+!                     'at i=', maxloc( abs( relchg)) , &
+!                'h_temp(i)=', h_temp( maxloc( abs( relchg)) ) , &
+!                  'L2_Norm=', F_L2_NORM( relchg, imax) 
 
 
 
@@ -731,9 +703,9 @@ h_new  = h_temp
 
 
 !Store summary info for this timestep
-numit  ( n ) = q   
-loc    ( n ) = maxloc ( abs( relchg ), dim=1 )     
-maxdiff( n ) = relchg ( loc ( n ) ) 
+numit   = q   
+loc     = maxloc ( abs( relchg ), dim=1 )     
+maxdiff = relchg ( loc  ) 
 
 !Give Error if Iteration fails to converge
 if (q .gt. qmax) then
@@ -746,17 +718,19 @@ if (q .gt. qmax) then
 end if
 
 
-close(50)   ! pf summary file
-close(110)  ! Run details file
+!close(50)   ! pf summary file
+!close(110)  ! Run details file
 !-----------------------------------------------------------------------------------
-! POST PROCESSING
+! P O S T   P R O C E S S I N G
 
 !Compute head
 head(:) = h_new(:) + Z(:)
 
-!Compute hydraulic gradient and flux ( both positive downwards)
+!------------------------------------------------------
+! HYDRAULIC GRADIENT AND FLUX through the whole domain 
+!------------------------------------------------------
 
-!Upstream boundary node (using a 1-sided approximation)
+!ETA = 1 BOUNDARY (1-sided approximation)
 i = 1
 hygrad(i) =  ( head(i) - head(i+1) )  /  ( X(i+1) - X(i) )
 !In the pavement
@@ -767,6 +741,7 @@ hs = max( 0., h_new(i) - b )
 q_surf(i) = 1. / n_mann * hs ** (2./3.) * sqrt( abs( hygrad(i) ) ) * hs
 q_tot(i) = q_pav(i) + q_surf(i)
 
+!DOMAIN INTERIOR
 do i = 2, imax - 1
     !hydrualic gradient
     hygrad(i) =  ( head(i-1) - head(i+1) )  /  ( X(i+1) - X(i-1) )
@@ -780,68 +755,50 @@ do i = 2, imax - 1
     q_tot(i) = q_pav(i) + q_surf(i)
 end do
 
-! DOWNSTREAM BOUNDARY ( 1 sided approximation)
+! ETA = 0 ( 1 sided approximation)
 i = imax
 !hydrualic gradient
 hygrad(i) =  ( head(i-1) - head(i) )  /  ( X(i) - X(i-1) )
-!thickness in the pavement
+!in the pavement
 hp = min( h_new(i), b )
 q_pav (i) = K * hp * hygrad(i)
-!thickness on the surface
+!on the surface
 hs = max( 0., h_new(i) - b )
 q_surf(i) = 1. / n_mann * hs ** (2./3.) * sqrt( abs( hygrad(i) ) ) * hs
 q_tot(i) = q_pav(i) + q_surf(i)
 
-!-----------------------------------------------------------------------------------
-!Write results to a file
+Qout = - q_tot( imax )  !make the flow out of the domain negative for consistency w/ 2D model
+!-------------------------------------------------------------
+! Locate transition to sheet flow
+!-------------------------------------------------------------
 
-        call DATE_AND_TIME(DATE,TIME)
-        call CPU_TIME(cputime)
+if( maxval( h_new ) .LT. b_pfc ) then
+    ! flow is everywhere in the pavement
+    X_sheet = XCV(imax) + EDX(imax)/2.
+else
+    ! its out of the pavement somewhere so lets find where
+    ! search from the left/upstream/eta=1 end of the domain and
+    ! stop at the first transition
+    findsheet: do i = 1, imax
+    if( h_new( i ) .GE. b_pfc ) then
+        X_sheet = X( i )
+        exit findsheet
+    end if
+        
+end do findsheet 
+    
+endif
 
-        OPEN(UNIT = 10, FILE = 'pfc1Dimp.csv', STATUS='REPLACE')
-        WRITE(10,*) 'Output From pfc1Dimp.f95'
-        WRITE(10,*) 'Timestamp,', DATE,' ', TIME,','
-        WRITE(10,*) 'Upstream Boundary == Fixed Value'
-        WRITE(10,*) 'Downstream Boundary == Sf = So'
-        WRITE(10,200) 'Hydraulic Conductivity (cm/s),', k
-        WRITE(10,200) 'Rainfall Intensity (cm/hr),', rain * 3600.
-        WRITE(10,200) 'PFC Thickness (cm),', b 
-        WRITE(10,200) 'Final Time (sec),', ( n-1 ) * dt 
-        WRITE(10,200) 'Time step (seconds),', dt 
-        WRITE(10,200) 'Grid spacing (cm),', dx(5) 
-        WRITE(10,*) 'Number of elements,', imax - 2
-        WRITE(10,200) 'CPU Time (seconds),', cputime
-        WRITE(10,*) '************************** &
-                     &MODEL OUTPUT IN [ SI  ] UNITS &
-                     &***********************************'
-        WRITE(10,*) 'X, eta,    Z, PFC Surface, Thickness, Head,', &
-                    'Hydraulic Gradient, Pavement Flux,'         , &
-                    ' Surface Flux, Total Flux,'
-        do i = 1, imax
-                WRITE(10,100) X(i), etaCV(i), Z(i), Z(i) + b,  &
-                              h_new(i), Head(i), hygrad(i),    &
-                              q_pav(i), q_surf(i), q_tot(i)    
-        END do
-        CLOSE(10)
 
-!-----------------------------------------------------------------------------------
-!Write calculation summary to file
 
-    OPEN( UNIT = 20, FILE = '1Ddetails.csv', STATUS='REPLACE')
-    WRITE(20,*) 'Timestamp,', DATE, ' ', TIME, ','
-    WRITE(20,*) '-----,'
-    WRITE(20,*) 'Timestep, Iterations, MaxRelChng, MaxLocn'
-    DO n = 1, nmax
-        WRITE(20,300) n, numit(n), maxdiff(n), loc(n)
-    end do
-    close(20)    
+
         
 !-----------------------------------------------------------------------------------
 !Format statements
 
 100     FORMAT (100 ( F14.7, ',' ) )        !  Formatting for the actual output
 200     FORMAT ( A, F10.4 )
-300     FORMAT ( 2 (I7, ','), E17.7, ',', I7, ',' )
+300     FORMAT ( 2 (I12, ','), E12.7, ',', I12, ',' )
 
 !-----------------------------------------------------------------------------------
         END subroutine pfc1Dimp

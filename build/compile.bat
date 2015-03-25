@@ -16,6 +16,8 @@ gfortran -c ..\src\pfc1Dfuns.f95
 gfortran -c ..\src\pfc1Dsubs.f95 
 gfortran -c ..\src\pfc2Dsubs.f95 
 gfortran -c ..\src\BoundCond.f95 
+gfortran -c ..\src\applyBCs.f95 
+gfortran -c ..\src\budget.f95 
 
 :: Step 2 compile and link the main program 
-gfortran -o ..\bin\Perfcode ..\src\PERFCODE.f95 shared.o pfc2Dfuns.o utilities.o inputs.o outputs.o geom_funcs.o ConvCoef.o GridGen.o solvers.o pfc1dfuns2.o pfc1dfuns.o pfc1dsubs.o pfc2dsubs.o boundcond.o 
+gfortran -o ..\bin\Perfcode ..\src\PERFCODE.f95 shared.o pfc2Dfuns.o utilities.o inputs.o outputs.o geom_funcs.o ConvCoef.o GridGen.o solvers.o pfc1dfuns2.o pfc1dfuns.o pfc1dsubs.o pfc2dsubs.o boundcond.o applyBCs.o budget.o

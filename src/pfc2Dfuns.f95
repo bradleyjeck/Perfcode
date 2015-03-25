@@ -1,8 +1,4 @@
 ! fortran_free_source
-!
-! (c) Copyright 2010, 2015 Bradley J. Eck
-! This module is part of PERFCODE 
-!
 
 ! This module holds external procedures (subroutine and functions)
 !  for the pfc2D model (PERFCODE).
@@ -34,10 +30,9 @@ end Function F_LinearIndex
 
 !===================================================================================
 !Function to switch the porosity on/off if the water is in/out of the pavement
-FUNCTION F_por(h)
-USE shared, only: b_pfc, por
+FUNCTION F_por(h, b_pfc, por)
 IMPLICIT NONE
-REAL h, F_por
+REAL h, F_por, b_pfc, por
 if     ( h >= b_pfc ) then
             F_por = 1.
 ELSEIF ( h < b_pfc  )  then

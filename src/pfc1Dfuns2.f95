@@ -1,8 +1,4 @@
 !fortran_free_source
-!
-! (c) Copyright 2010, 2015 Bradley J. Eck
-! This module is part of PERFCODE 
-!
 
 ! need a seperate module for these last two functions b/c
 ! the function F_CC calls both of them, and they cannot be 

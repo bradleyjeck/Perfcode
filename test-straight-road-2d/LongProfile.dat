@@ -1,0 +1,10 @@
+Longitudinal Profile Input file for PERFCODE
+	2		<------ Number of points to define longitudinal profile
+ Point No. Distance(m)  and Elevation(m)  ALONG ETA == 0		
+	1,		0.00,	   10.0000000	<--- West boundary of domain
+	2,		20.0,	   10.0	        <--- East boundary of domain 
+
+
+
+
+			

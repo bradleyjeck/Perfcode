@@ -1,0 +1,11 @@
+Roadway Cross Section Input file for PERFCODE
+	1	   <------ Number of segments to define cross section
+Segment		Slope	Width[m] 
+	1,     -0.03,   10.0
+
+Note:  SLOPE is defined left to right with a negative slope
+       corresponding to a loss of elevation moving from left to right.
+       SEGMENTS are numbered from eta = 0 to eta = 1 so segment 1 is 
+       on the right end of the domain.
+		
+

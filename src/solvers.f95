@@ -1,17 +1,11 @@
 ! fortran_free_source
 !
-! (c) Copyright 2010, 2015 Bradley J. Eck
-! This module is part of PERFCODE 
+!  This module is part of PERFCODE, written by Bradley J Eck.
 !
-!
-!  This module contains subroutines for a few linear solvers
-!============================================================================
-!   \\\\\\\\\\                                        //////////
-                        MODULE solvers 
-!   //////////                                        \\\\\\\\\\
-                        implicit none
+MODULE solvers 
+implicit none
+contains
 
-                        contains
 !============================================================================
 !   Subroutines related to solving linear systems:
 !   1. DIAGDOM_PENTA checks for diagonal dominance
@@ -21,7 +15,6 @@
 !       of linear equations. 
 !   3. THOMAS uses the tri-diagonal matrix algorithm to solve
 !        a tri-diagonal linear system 
-
 
 
 !===================================================================
@@ -149,10 +142,10 @@ do m = 1, maxit
         relchng(k) = ( Xnew(k) - Xtmp(k) ) / Xtmp(k)
     end do
     ! check for convergence
-!    write(dev,*) 'GAUSS_SIEDEL_PENTA: Iteration', m, ', Max rel change:', maxval(abs(relchng)) 
+!    write(dev,*) 'GAUSS_SEIDEL_PENTA: Iteration', m, ', Max rel change:', maxval(abs(relchng)), 'L2_norm:', F_L2_Norm( relchng, n)
     if( maxval( abs( relchng ) ) .LT. tolit .AND. &
           F_L2_Norm( relchng, n) .LT. tolit          ) then
-!            write(dev,*) 'GAUSS_SIEDEL_PENTA: Iterations required to converge: ', m
+!            write(dev,*) 'GAUSS_SEIDEL_PENTA: Iterations required to converge: ', m
             numits = m
             exit ! exit iteration loop
 !    elseif( maxval( abs(relchng) ) .GT. tolit ) then
@@ -168,7 +161,7 @@ if ( m .gt. maxit ) then
     STOP
 endif
 
-10 format( I7, 10f12.7 )
+10 format( I12, 10f12.7 )
 
 !---------------------------------------------------------------------------
 end subroutine gauss_seidel_penta
@@ -227,10 +220,4 @@ END SUBROUTINE THOMAS
 !       //////////         T H O M A S               \\\\\\\\\\
 !========================================================================
 
-!============================================================================
-!   \\\\\\\\\\\\\\\\\\                    //////////////////////
-                            END MODULE solvers
-!   //////////////////                    \\\\\\\\\\\\\\\\\\\\\\
-!============================================================================
-
-
+END MODULE solvers

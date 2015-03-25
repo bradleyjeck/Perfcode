@@ -1,12 +1,11 @@
 ! fortran_free_source
 !
-! (c) Copyright 2010, 2015 Bradley J. Eck
-! This module is part of PERFCODE 
-!
-!
 !  This module is part of PERFCODE, written by Bradley J. Eck.
 !
-!   File Date:  5 April 2010
+!   History:  5 April 2010  -- original coding
+!                July 2011  -- revised
+!
+!   
 !
 !   Purpose:  This module declares variables to be used globally
 !  
@@ -16,11 +15,8 @@
 !               listing of variables with descriptions
 !             - Use ONLY statement in subroutines to restrict 
 !               access to variables in this module
-!================================================================ 
-!       \\\\\\\\\\                                   ////////// 
-                            MODULE SHARED  
-!       //////////                                   \\\\\\\\\\
-!================================================================ 
+
+MODULE SHARED  
 implicit none
 save  
 
@@ -28,10 +24,11 @@ save
 !PARAMETERS INPUT FILE
 !--------------------------------------------------
 !   PFC Properties
-REAL :: K      ! Hydraulic Conductivity [m/s]
-REAL :: por    ! Porosity [--]
-REAL :: b_pfc  !PFC Thickness [ m ]
-REAL :: n_mann !Manning's n [ s / m ^(1/3) ]
+logical :: params_vary
+REAL, TARGET :: K_input      ! Hydraulic Conductivity [m/s]
+REAL, TARGET :: por_input
+REAL, TARGET :: b_pfc_input  !PFC Thickness [ m ]
+REAL, TARGET :: n_mann_input !Manning's n [ s / m ^(1/3) ]
 !   Physical constants
 REAL :: g      ! Gravitational Acceleration [m/s/s]
 ! Time Steps
@@ -40,20 +37,35 @@ REAL :: dt_pfc, dt_sheet, max_time
 REAL :: dx, dy
 !Tolerances
 INTEGER :: qmax, maxit
-REAL :: eps_matrix, eps_itr, eps_ss
+REAL :: eps_matrix, eps_itr
 REAL :: relax, relax_tran
 !Initial Condition
 real :: h0 ! initial depth in meters
 !Boundary Conditions
-character( len=7 ) :: north_bc, south_bc, east_bc, west_bc
+logical :: BCs_vary
+character( len=7 ) :: north_bc_input, south_bc_input
+character( len=7 ) :: east_bc_input, west_bc_input
 !Animation Options
 logical :: animate ! at all and for this step
 real :: dt_ani
-!----------------
+!Mode of the model
+character( len = 2 ) :: model_mode
+
+
+!--------------------------
 ! OTHER PARAMETERS
 !--------------------------
-INTEGER, PARAMETER :: max_rec = 1000
+INTEGER, PARAMETER :: max_rec = 20000
 REAL, PARAMETER :: h_pfc_min  = 1.e-10   ! use this instead of TINY
+
+! compass directions as integers by azimuth or bearing
+! for use in conveyance subroutine and elsewhere
+!  using keywords as integers rather than characters speeds up
+!   if/then statements
+INTEGER, PARAMETER :: north = 360, south = 180, east = 90, west = 270
+INTEGER, PARAMETER :: NorthEast =  45, SouthEast = 135
+INTEGER, PARAMETER :: NorthWest = 315, SouthWest = 225
+INTEGER, PARAMETER :: old = 0, itr = 1, dry = 2
 
 !---------------------------
 ! RAINFALL
@@ -115,10 +127,17 @@ real :: long_slope  !longitudinal slope at each end of domain
 !  1D GRID GENERATION
 integer, TARGET :: TNE
 REAL, ALLOCATABLE, DIMENSION(:), TARGET :: EDX, XCV, ZCV, etaCV
-! 1D boudary conditions
-real, allocatable, dimension(:) :: h_old_1d, h_new_1d
+! 1D model/boudary conditions
+real, allocatable, dimension(:) :: h_old_1d, h_new_1d, q_surf, q_pav
 real, allocatable, dimension(:) :: slope_cs_1D, wid_cs_1d, eta_cs_1D
 
+!-------------------------------
+!  PFC PROPERTIES  & BOUNDARY CONDITIONS
+!-----------------------------
+real, allocatable, dimension(:, :) :: hyd_cond, por, b_pfc, n_mann
+character(len=7), allocatable, dimension(:) :: north_bc, south_bc
+character(len=7), allocatable, dimension(:) :: east_bc, west_bc
+logical, allocatable, dimension(:,:) :: is_boundary, is_corner
 
 !------------------------------------------------------------
 ! INTERMEDIATE VARIABLES
@@ -137,8 +156,8 @@ REAL, ALLOCATABLE, DIMENSION(:) :: rain  !rainfall depth for each time step
 REAL, ALLOCATABLE, DIMENSION(:) :: time  
 real :: time_simulated = 0.
 character( len = 9 ) :: out_time   ! Characters to for internal writes to store
-character( len = 8 ) :: sim_time   ! simulation time w/o floating point error 99999.99
-character( len = 8 ) :: sim_time2
+character( len = 9 ) :: sim_time   ! simulation time w/o floating point error 99999.99
+character( len = 9 ) :: sim_time2
 
 ! FRICTION SLOPES, POROSITY FUNCTIONS, AND CONVEYANCE COEFFICIENTS
 !  'old' means time level 'n'
@@ -188,7 +207,7 @@ real, allocatable, dimension(:,:) :: h_temp_hist
 REAL, ALLOCATABLE, DIMENSION(:,:) :: h_vec_ani 
 
 ! Matrix Form
-REAL, ALLOCATABLE, DIMENSION(:,:), TARGET :: h_old, h_itr  
+REAL, ALLOCATABLE, DIMENSION(:,:), TARGET :: h_old, h_itr, h_new  
 
 ! Matrix form, at special times
 real, allocatable, dimension(:,:) :: h_max, h_Q_max
@@ -199,8 +218,8 @@ real, allocatable, dimension(:,:) :: h_imid_j1_max, h_imid_max
 !------------------------------------------------------
 
 ! Input variables and values
-character( len=10), dimension(18) :: input_variables
-real, dimension(18) :: input_values
+character( len=15), dimension(17) :: input_variables
+real, dimension(17) :: input_values
 
 ! Information about each timestep
 INTEGER, ALLOCATABLE, DIMENSION(:) :: numit, loc 
@@ -213,32 +232,38 @@ integer :: solver_numits, timestep_solver_numits
 ! time history of the depth at i=imax/2 j=1
 real, allocatable, dimension( : ) :: h_imid_j1_hist, h_imid_max_hist 
 
+! location of transition to sheet flow
+real :: X_sheet
+real, allocatable, dimension( : ) :: eta_sheet
+
+! Water budget
+real :: old_vol
+real, allocatable, dimension(:) :: pfc_vol, surface_vol, rain_vol
+real, allocatable, dimension(:) :: north_vol, south_vol, east_vol, west_vol
+real, allocatable, dimension(:) :: net_flow, storage_change, vol_error, vol_error_frac
+
 !---------------------------------------------------
 !  MISCELLANEOUS  (gotta love this category)
 !----------------------------------------------------
 
-integer, dimension(60) :: astat=0     ! for keeping track of allocation statuses
-integer, dimension( 30 ) :: astat2(0:29) = 0
+integer, dimension(200) :: astat=0     ! for keeping track of allocation statuses
 
 CHARACTER(8)  FILE_DATE
 CHARACTER(10) FILE_TIME
 
+character (len=10) :: timechar, datechar, zonechar
+integer, dimension(8) :: dtvals
+
 ! Routine timing
 REAL    :: cputime
 integer :: run_start_time, run_end_time, count_rate, count_max
-
 integer :: report = 1  ! determine if we should write out the timestep. 
 
 ! For animation output
-
 integer :: ani = 0  ! use this like 'report'
 integer :: animax   ! maximum value of ani, compute from max_time / ani_step  
 character( len = 10 ), allocatable, dimension(:) :: ani_lab   ! labels for animtaion output
 real, allocatable, dimension(:) :: ani_time
 character(len = 10) :: lab
 
-!================================================================================
-!       \\\\\\\\\\                                            //////////
-                                END MODULE SHARED
-!       //////////                                            \\\\\\\\\\
-!================================================================================
+END MODULE SHARED

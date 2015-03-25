@@ -1,0 +1,3 @@
+..\bin\perfcode
+pause
+

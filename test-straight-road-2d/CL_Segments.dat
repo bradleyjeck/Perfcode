@@ -1,0 +1,4 @@
+1	<----- Number of Segments
+Segment,	xcc1,	ycc1,	dx,		dy,		R1,		dR,		W,			theta1,			dtheta,
+1,  		100.0, -9960.0, 0.,	    0.,    10000.0,	0.0, 	10.0,	    1.572796324,	-0.002,
+

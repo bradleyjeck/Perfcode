@@ -1,8 +1,5 @@
 ! fortran_free_source
-!
-! (c) Copyright 2010, 2015 Bradley J. Eck
-! This module is part of PERFCODE 
-!
+
 
 module ConvCoef
 
@@ -18,24 +15,32 @@ contains
 !   \\\\\\\\\\  B E G I N     S U B R O U T I N E //////////
 !   //////////      C O N V E Y A N C E           \\\\\\\\\\
 !=======================================================================
-!
-!   Purpose:    This subroutine computes the conveyance coefficient
-!               for a given cell face...look out, its fancy!
 SUBROUTINE CONVEYANCE( face, sol, i, j, CC )          
-USE shared, ONLY: Sfw_old, Sfe_old, Sfs_old, Sfn_old,   &
-                  Sfw_itr, Sfe_itr, Sfs_itr, Sfn_itr,   &
-                  h_old, h_itr, wid, Z, K, n_mann,      & 
-                  b_pfc, lng, lng_south, lng_north,     &
-                  h_pfc_min, area
+!   This subroutine computes the conveyance coefficient
+!               for a given cell face...look out, its fancy!
+!   HISTORY:    March 2010 -- Original coding
+!               July 2011  -- Modified to use harmonic average K & n_mann
+!                             in case values differ between cells.  
+!                             Also added a check for outcell index to 
+!                             allow calling at a boundary face
+USE shared, ONLY: Sfw_old, Sfe_old, Sfs_old, Sfn_old,     &
+                  Sfw_itr, Sfe_itr, Sfs_itr, Sfn_itr,     &
+                  h_old, h_itr, wid, Z, hyd_cond, n_mann, & 
+                  b_pfc, lng, lng_south, lng_north,       &
+                  h_pfc_min, area,                        &
+                  north, south, east, west, old, itr
+USE utilities, ONLY: F_HarmonicAvg
+
 implicit none
 !VARIABLE DECLARATIONS
 !   Arguments
-character(5), intent( in )  :: face     ! Which face?
-character(3), intent( in)   :: sol      ! Computed based on which solution?
-integer, intent( in )       :: i, j     ! of which cell?
-REAL, intent(out)           :: CC       ! the conveyance coefficient
+integer, intent( in )  :: face     ! Which face?
+integer, intent( in)   :: sol      ! Computed based on which solution?
+integer, intent( in )  :: i, j     ! of which cell?
+REAL, intent(out)      :: CC       ! the conveyance coefficient
 !   Internal Variables
-real  :: hp, hs ! the thickness in the pavement and on the surface
+real :: K_equiv  ! equivalent hydraulic conductivity
+real :: hp, hs   ! the thickness in the pavement and on the surface
 REAL :: distin, distout  ! size of cells for scaling purposes (will be length or width depeding on which direction we're going.
 REAL :: fluxdist    ! the distance (size) of the cell face that the flux applies t
 REAL :: hin, hout    ! thickness at CV center
@@ -47,7 +52,7 @@ REAL :: Sf !the friction slope for the particular face that we're working with
 logical :: error !make sure the result is reasonable
 !-------------------------------------------------------------------------
 ! Compute based on the old or iterative thickness?
-if ( sol .EQ. 'old' ) then
+if ( sol .EQ. old ) then
     ! thickness array
     h => h_old
     ! friction slope arrays
@@ -55,7 +60,7 @@ if ( sol .EQ. 'old' ) then
     Sfe => Sfe_old
     Sfs => Sfs_old
     Sfn => Sfn_old
-elseif( sol .eq. 'itr' ) then
+elseif( sol .eq. itr ) then
     h => h_itr
     Sfw => Sfw_itr
     Sfe => Sfe_itr
@@ -64,7 +69,7 @@ elseif( sol .eq. 'itr' ) then
 endif
 
 ! set internal/generic variables based on cell face
-if ( face .EQ. 'west ' ) then
+if ( face .EQ. west ) then
     distin = lng( i, j)
     distout= lng( i-1, j)
     hin = h(i,j)
@@ -73,7 +78,8 @@ if ( face .EQ. 'west ' ) then
     zout= Z(i-1,j)
     fluxdist = wid(i,j)
     Sf = Sfw( i, j)
-elseif( face .eq. 'east ' ) then
+    K_equiv = F_HarmonicAvg( x=(/ hyd_cond(i,j), hyd_cond(i-1,j) /), imax=2 )
+elseif( face .eq. east ) then
     distin = lng( i, j)
     distout= lng( i+1, j)
     hin = h(i,j)
@@ -82,7 +88,8 @@ elseif( face .eq. 'east ' ) then
     zout= Z(i+1,j)
     fluxdist = wid(i,j)
     Sf = Sfe( i, j)
-elseif( face .EQ. 'south' ) then
+    K_equiv = F_HarmonicAvg( x=(/ hyd_cond(i,j), hyd_cond(i+1,j) /), imax=2 )
+elseif( face .EQ. south ) then
     distin = wid( i, j)
     distout= wid( i, j-1)
     hin = h(i,j)
@@ -91,7 +98,8 @@ elseif( face .EQ. 'south' ) then
     zout= Z(i,j-1)
     fluxdist = lng_south(i,j)
     Sf = Sfs(i,j)
-elseif( face .EQ. 'north' ) then
+    K_equiv = F_HarmonicAvg( x=(/ hyd_cond(i,j), hyd_cond(i,j-1) /), imax=2 )
+elseif( face .EQ. north ) then
     distin = wid( i, j)
     distout= wid( i, j+1)
     hin = h(i,j)
@@ -100,6 +108,7 @@ elseif( face .EQ. 'north' ) then
     zout= Z(i,j+1)
     fluxdist = lng_north(i,j)
     Sf = Sfn(i,j)
+    K_equiv = F_HarmonicAvg( x=(/ hyd_cond(i,j), hyd_cond(i,j+1) /), imax=2 )
 endif
 !Compute the total head at the cell face
 head_at_face = ( (hin+zin)*distout + (hout+zout)*distin )  &
@@ -107,8 +116,8 @@ head_at_face = ( (hin+zin)*distout + (hout+zout)*distin )  &
 !Elevation at the cell face
 Zface        = ( zin*distout + zout*distin ) / ( distin + distout)
 !compute the thicknesses
-hp = MIN ( b_pfc, head_at_face - Zface        )
-hs = MAX ( 0.   , head_at_face - Zface - b_pfc)
+hp = MIN ( b_pfc(i,j), head_at_face - Zface             )
+hs = MAX ( 0.        , head_at_face - Zface - b_pfc(i,j))
 
 
 !Force hp to stay positive
@@ -123,17 +132,23 @@ end if
 
 if( hs .GT. 0.) then
     !Sheet flow occurs and compute CC as usual
-    CC = ( K * hp + 1./n_mann*hs**(5./3.)/sqrt(Sf) )  *  &
+    CC = ( K_equiv * hp + 1./n_mann(i,j)*hs**(5./3.)/sqrt(Sf) )  *  &
             ( 2.*fluxdist / ( distout + distin ) ) / Area(i,j)
 else
     !Sheet flow does not occur and CC only depends on subsurface
-    CC = ( K * hp   )  *  &     
+    CC = ( K_equiv * hp   )  *  &     
             ( 2.*fluxdist / ( distout + distin ) ) / Area(i,j)
 end if
 
 
+! Set CC = 0 if Sf ==0
+if( Sf == 0. ) then
+    CC =  0.
+end if
+
+
 ! ERROR CHECKING FOR CONVEYANCE COEFS
-if( CC .GT. HUGE(CC) .OR. CC .LT. -HUGE(CC) ) then
+if( ( CC .GT. HUGE(CC) ) .OR. ( CC .LT. -HUGE(CC) ) ) then
     error = .true.
 else
     error = .false.
@@ -143,9 +158,9 @@ endif
 if( error .eqv. .true. ) then
     write(*,*) 'Problem with conveyance coefficient!'
     print *, 'i = ', i, ' j = ', j, ' Face = ', face, ' Soln = ', sol
-    print *, '       K = ', K
+    print *, '       K = ', K_equiv
     print *, '      hp = ', hp
-    print *, '  n_mann = ', n_mann
+    print *, '  n_mann = ', n_mann(i,j)
     print *, '      hs = ', hs
     print *, '      Sf = ', Sf
     print *, 'fluxdist = ', fluxdist
@@ -156,27 +171,6 @@ if( error .eqv. .true. ) then
     write(*,*) 'Stopping Program'
     STOP
 endif
-
-
-
-! print the inputs for checking
-!       print *, ''
-!       print *, 'i = ', i, ' j = ', j, ' Face = ', face, ' Soln = ', sol
-!       print *, '       K = ', K
-!       print *, '      hp = ', hp
-!       print *, '  n_mann = ', n_mann
-!       print *, '      hs = ', hs
-!       print *, '      Sf = ', Sf
-!       print *, 'fluxdist = ', fluxdist
-!       print *, ' distout = ', distout
-!       print *, '  distin = ', distin
-!       print *, '    Area = ', Area(i,j)
-!       print *, '      CC = ', CC
-!
-
-
-
-
 
 END subroutine conveyance
 
@@ -192,7 +186,8 @@ END subroutine conveyance
 !   Purpose:    This subroutine computes the magnitude of the friction
 !               slope at the cell faces.
 !               The arguments specifcy whether to use the OLD or ITR
-!               solution array in the calculations and the arrays for storing the results.
+!               solution array in the calculations and the arrays 
+!               for storing the results.
 !
 !
 !       ---x---|---x---     Key:  * is CV Center
@@ -200,18 +195,16 @@ END subroutine conveyance
 !       |  *   O   *  |             computed here by central difference
 !       |      |      |           O the four normal components are
 !       ---x---|---x---             tangent here and so are averaged
-!PERFCODE	PERFCODE.f95	Main program
-
+!
 SUBROUTINE FrictionSlope( sol, Sfw, Sfe, Sfs, Sfn )
-use SHARED, only: h_old, h_itr, Z, lng, wid, imax, jmax
-                  
-use outputs, only: write_flipped_matrix
+use SHARED,    only: h_old, h_itr, Z, lng, wid, imax, jmax, old, itr, dry                  
+use outputs,   only: write_flipped_matrix
 use utilities, only: F_PythagSum, F_Extrapolate
 !-------------------------------------------------------------------------
 !VARIABLE DECLARATIONS
 implicit none
 !   Arguments
-character(3), intent( in ) :: sol
+integer, intent( in ) :: sol
 REAL, DIMENSION(imax,jmax), intent(out), optional :: Sfw, Sfe, Sfs, Sfn
 !   Internal Variables
 REAL, DIMENSION(imax, jmax) :: HD      ! Total HEAD at cell centers
@@ -223,11 +216,11 @@ INTEGER :: i, j         !array idices
 
 !----------------------------------------------------------------------------
 ! choose which thickness array to use for estimating the friction slope
-if ( sol .EQ. 'old' ) then
+if ( sol .eq. old ) then
     h => h_old
-elseif( sol .eq. 'itr' ) then
+elseif( sol .eq. itr ) then
     h => h_itr
-elseif( sol .eq. 'dry' ) then
+elseif( sol .eq. dry ) then
     allocate( h_dry( imax, jmax ) )
     h_dry = 0.0
     h => h_dry
@@ -356,7 +349,7 @@ end do
 
 
 ! deallocate space for h_dry
-if( sol .eq. 'dry' ) then
+if( sol .eq. dry ) then
     deallocate( h_dry )
 endif
 
