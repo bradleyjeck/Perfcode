@@ -198,9 +198,9 @@ ir = (/ ( i, i = seg, 1, -1  ) /)
 
 !--------------------------------------------------
 !Format statements
-90      FORMAT( i, F12.6 )
+90      FORMAT( i7, F12.6 )
 99      FORMAT( 2( F12.6, ',' ) )
-100     FORMAT( 2( F12.6, ',' ), 1(I, ','), 5( F12.6, ',')  )
+100     FORMAT( 2( F12.6, ',' ), 1(I7, ','), 5( F12.6, ',')  )
 
 
 !------------------------------------------------------------------------------
@@ -345,7 +345,7 @@ write(50,54) 'n/i', (/ (i,  i = 1, imax) /)
 
 open( unit = 110, file = '1DRunDetails.txt', status = 'REPLACE')
 
-54 format( ( A, ','), 10000( I, ',') )
+54 format( ( A, ','), 10000( I7, ',') )
 
 
 
@@ -687,7 +687,7 @@ if( maxval( h_temp) .LT. TINY( h_temp(1) )  ) then
 
        call write_vector( h_old, imax, 'h_old_1d.csv')
        STOP
-10  FORMAT (  (I, ','), 5(E, ',') ) 
+10  FORMAT (  (I7, ','), 5(E17.7, ',') ) 
 
 end if
 
@@ -841,7 +841,7 @@ q_tot(i) = q_pav(i) + q_surf(i)
 
 100     FORMAT (100 ( F14.7, ',' ) )        !  Formatting for the actual output
 200     FORMAT ( A, F10.4 )
-300     FORMAT ( 2 (I, ','), E, ',', I, ',' )
+300     FORMAT ( 2 (I7, ','), E17.7, ',', I7, ',' )
 
 !-----------------------------------------------------------------------------------
         END subroutine pfc1Dimp

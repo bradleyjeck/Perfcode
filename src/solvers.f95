@@ -168,7 +168,7 @@ if ( m .gt. maxit ) then
     STOP
 endif
 
-10 format( I, 10f12.7 )
+10 format( I7, 10f12.7 )
 
 !---------------------------------------------------------------------------
 end subroutine gauss_seidel_penta

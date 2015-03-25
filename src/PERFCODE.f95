@@ -1497,7 +1497,7 @@ write( 15, 156 ) input_values(:), north_bc, south_bc, east_bc, west_bc
 close(15)
 
 155  format (  22( A, ',') )
-156  format (  18( E, ','), 4 ( A, ',') )
+156  format (  18( E17.7, ','), 4 ( A, ',') )
 !-------------------------------------------------------------------------
 !Write time history to a file
 !  ( hydrographs and anything else time-dependant 
@@ -1574,7 +1574,7 @@ close( 71 )
 end if
 
 
-711 format( (I, ','), (A, ','), (F8.2, ',') )
+711 format( (I7, ','), (A, ','), (F8.2, ',') )
 
 !-------------------------------------------------------------------------------
 ! Output grid numbering scheme to a file
@@ -1594,17 +1594,17 @@ close(30)
 !----------------------------------------------------------------------------------
 !Format statements
 
-2       FORMAT( I, ',', 10000 ( E, ',') )
+2       FORMAT( I7, ',', 10000 ( E17.7, ',') )
 10      FORMAT('   ', ( i3, '    '),  ( F10.3, '  ') , F10.6 ) 
 111     FORMAT( f9.2 )
-200     FORMAT ( A, ( E, ',') ) 
-201     FORMAT ( A, ( I, ',') ) 
-300     FORMAT ( 2 (     I, ','),      F12.7, ',' , &    ! n, numit, maxdif
-                         I, ',' ,          E, ',' , &    ! loc, L2_History
+200     FORMAT ( A, ( E17.7, ',') ) 
+201     FORMAT ( A, ( I7, ',') ) 
+300     FORMAT ( 2 (     I7, ','),      F12.7, ',' , &    ! n, numit, maxdif
+                         I7, ',' ,          E17.7, ',' , &    ! loc, L2_History
                  2 ( F12.8, ','), ( F12.3, ',' ), 3 ( F12.8 ,',')     )  ! rain, maxthk, time, Qout, h_imid_j1hist, h_imid_max_hist
-400     FORMAT( 10000 ( I, ',' ) )
-401     FORMAT( (I, ',') , 2( F12.7, ',' ) )
-660     FORMAT(  2( I, ','), 2( F12.7, ',') )
+400     FORMAT( 10000 ( I7, ',' ) )
+401     FORMAT( (I7, ',') , 2( F12.7, ',' ) )
+660     FORMAT(  2( I7, ','), 2( F12.7, ',') )
 !------------------------------------------------------------------------------
 end program PERFCODE
 !===================================================================================

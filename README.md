@@ -26,12 +26,16 @@ Perfcode.
 [Coupled Surface-Subsurface Model for Simulating Drainage
  from Permeable Friction Course Highways]
 (http://ascelibrary.org/doi/abs/10.1061/%28ASCE%29HY.1943-7900.0000474)
+
 BJ Eck, ME Barrett, RJ Charbeneau
+
 Journal of Hydraulic Engineering 138 (1), 13-22
 
 [Drainage hydraulics of porous pavement: Coupling surface and subsurface flow]
 (http://www.crwr.utexas.edu/reports/2010/rpt10-2.shtml)
+
 BJ Eck, RJ Charbeneau, ME Barrett
+
 Center for Research in Water Resources, University of Texas at Austin
 
 A video showing results of a Perfcode simulation is also available at http://bradeck.net/pfc-video/index.htm 
