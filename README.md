@@ -41,20 +41,20 @@ The easiest way to become familiar with the inputs Perfcode needs and the
 outputs it generates is to run one of the test examples included in the
 repository. 
 1. Download the zip file of the repository and Unzip to your preferred location
-1. Open a command prompt in one of the \test- directories 
-2. Invoke the run-test.bat batch file   
-3. Refer to Appendix A of the report linked above for details on the input and output files.
+2. Open a command prompt in one of the \test- directories 
+3. Invoke the run-test.bat batch file   
+4. Refer to Appendix A of the report linked above for details on the input and output files.
 
 ## Compilation 
 ### Windows
 A windows binary is included in the \bin directory. 
 
 The application may also be compiled as follows:
-3. Open a command prompt in the \build directory 
-4. Confirm that gfortran is installed and can be invoked from the \build
+1. Open a command prompt in the \build directory 
+2. Confirm that gfortran is installed and can be invoked from the \build
    directory with command gfortran
-5. Run the batch file compile.bat
-6. Find the executable in the \bin directory   
+3. Run the batch file compile.bat
+4. Find the executable in the \bin directory   
 
 ### Linux 
 ToDo
