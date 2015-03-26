@@ -40,6 +40,7 @@ A video showing results of a Perfcode simulation is also available at http://bra
 The easiest way to become familiar with the inputs Perfcode needs and the
 outputs it generates is to run one of the test examples included in the
 repository. 
+
 1. Download the zip file of the repository and Unzip to your preferred location
 2. Open a command prompt in one of the \test- directories 
 3. Invoke the run-test.bat batch file   
@@ -50,6 +51,7 @@ repository.
 A windows binary is included in the \bin directory. 
 
 The application may also be compiled as follows:
+
 1. Open a command prompt in the \build directory 
 2. Confirm that gfortran is installed and can be invoked from the \build
    directory with command gfortran
