@@ -58,8 +58,11 @@ The application may also be compiled as follows:
 3. Run the batch file compile.bat
 4. Find the executable in the \bin directory   
 
-### Linux 
-ToDo
+### Mac/Linux 
+Compilation and testing are specified in the Makefile.
+
+From a terminal session in the root folder of the project, compile with
+```make``` and run the tests with ```make test```.
 
 
 
